@@ -44,22 +44,26 @@ for stock in selected_stocks:
     if 'isPartial' in trend_data.columns:
         trend_data.drop(columns=['isPartial'], inplace=True)
 
-    # Fetch stock price data from Yahoo Finance
-    stock_data = yf.download(ticker, period="1mo", interval="1d")
-    stock_data.dropna(subset=['Close', 'Volume'], inplace=True)
-
-    # Google Trends chart
     with col1:
         st.subheader(f"📊 Google Trends: {keyword}")
-        st.line_chart(trend_data[keyword])
+        if not trend_data.empty:
+            st.line_chart(trend_data[keyword])
+        else:
+            st.warning(f"No Google Trends data found for {keyword}")
 
-    # Stock price and volume chart
+    # Fetch stock price data from Yahoo Finance
+    stock_data = yf.download(ticker, period="1mo", interval="1d")
+
     with col2:
         st.subheader(f"💹 Price & Volume: {stock}")
-        fig, ax1 = plt.subplots()
-        ax1.plot(stock_data.index, stock_data['Close'], color='blue', label='Close Price')
-        ax1.set_ylabel('Price (₹)', color='blue')
-        ax2 = ax1.twinx()
-        ax2.bar(stock_data.index, stock_data['Volume'], color='gray', alpha=0.3)
-        ax2.set_ylabel('Volume', color='gray')
-        st.pyplot(fig)
+        if not stock_data.empty and 'Close' in stock_data.columns and 'Volume' in stock_data.columns:
+            stock_data.dropna(subset=['Close', 'Volume'], inplace=True)
+            fig, ax1 = plt.subplots()
+            ax1.plot(stock_data.index, stock_data['Close'], color='blue', label='Close Price')
+            ax1.set_ylabel('Price (₹)', color='blue')
+            ax2 = ax1.twinx()
+            ax2.bar(stock_data.index, stock_data['Volume'], color='gray', alpha=0.3)
+            ax2.set_ylabel('Volume', color='gray')
+            st.pyplot(fig)
+        else:
+            st.warning(f"📉 No stock data available for {stock} ({ticker})")

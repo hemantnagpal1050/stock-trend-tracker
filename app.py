@@ -5,11 +5,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 
-# Streamlit page configuration
-st.set_page_config(page_title="Stock Interest Tracker", layout="wide")
-st.title("📈 Stock Trends & Price Tracker (Google Trends + Market Data)")
+# Streamlit page config
+st.set_page_config(page_title="Stock Trend Tracker", layout="wide")
+st.title("📈 Stock Trends & Price Tracker")
 
-# Define stock keywords (Google search terms) and tickers
+# Define stock names and their Google Trends keywords + Yahoo Finance tickers
 stock_keywords = {
     "RVNL": "RVNL share price",
     "IRFC": "IRFC stock",
@@ -25,65 +25,52 @@ tickers = {
     "Adani Power": "ADANIPOWER.NS"
 }
 
-# Stock selector (limit selection to avoid Google rate limits)
-selected_stocks = st.multiselect(
-    "Select up to 3 stocks to analyze:", 
-    options=list(stock_keywords.keys()), 
-    default=["RVNL", "IRFC"],
-    max_selections=3
-)
+# Let user select one stock
+stock = st.selectbox("Select a stock to analyze:", options=list(stock_keywords.keys()))
+keyword = stock_keywords[stock]
+ticker = tickers[stock]
 
-# Initialize pytrends connection
+# Initialize pytrends
 pytrends = TrendReq(hl='en-IN', tz=330)
 
-# Layout
-col1, col2 = st.columns(2)
+# --- Google Trends ---
+st.subheader(f"📊 Google Trends: {keyword}")
+try:
+    pytrends.build_payload([keyword], timeframe='today 1-m', geo='IN')
+    time.sleep(1.5)  # Wait to prevent 429 errors
+    trend_data = pytrends.interest_over_time()
 
-# Loop through selected stocks
-for stock in selected_stocks:
-    keyword = stock_keywords[stock]
-    ticker = tickers[stock]
+    if 'isPartial' in trend_data.columns:
+        trend_data = trend_data.drop(columns=['isPartial'])
 
-    # --- Google Trends ---
-    with col1:
-        st.subheader(f"📊 Google Trends: {keyword}")
-        try:
-            pytrends.build_payload([keyword], timeframe='today 1-m', geo='IN')
-            time.sleep(1.5)  # Add delay to avoid TooManyRequestsError
-            trend_data = pytrends.interest_over_time()
-            if 'isPartial' in trend_data.columns:
-                trend_data.drop(columns=['isPartial'], inplace=True)
+    if not trend_data.empty:
+        st.line_chart(trend_data[keyword])
+    else:
+        st.warning("No Google Trends data available.")
+except Exception as e:
+    st.warning(f"⚠️ Google Trends request failed: {e}")
 
-            if not trend_data.empty:
-                st.line_chart(trend_data[keyword])
-            else:
-                st.warning(f"No Google Trends data found for {keyword}")
+# --- Stock Data ---
+st.subheader(f"💹 Stock Price & Volume: {stock}")
+try:
+    stock_data = yf.download(ticker, period="1mo", interval="1d")
 
-        except Exception as e:
-            st.warning(f"⚠️ Google Trends request failed for '{keyword}': {e}")
+    if (
+        not stock_data.empty and
+        all(col in stock_data.columns for col in ['Close', 'Volume'])
+    ):
+        stock_data = stock_data.dropna(subset=['Close', 'Volume'])
 
-    # --- Stock Price and Volume Data ---
-    with col2:
-        st.subheader(f"💹 Price & Volume: {stock}")
-        try:
-            stock_data = yf.download(ticker, period="1mo", interval="1d")
+        fig, ax1 = plt.subplots()
+        ax1.plot(stock_data.index, stock_data['Close'], color='blue')
+        ax1.set_ylabel('Price (₹)', color='blue')
 
-            if (
-                not stock_data.empty and
-                all(col in stock_data.columns for col in ['Close', 'Volume'])
-            ):
-                stock_data = stock_data.dropna(subset=['Close', 'Volume'])
+        ax2 = ax1.twinx()
+        ax2.bar(stock_data.index, stock_data['Volume'], color='gray', alpha=0.3)
+        ax2.set_ylabel('Volume', color='gray')
 
-                fig, ax1 = plt.subplots()
-                ax1.plot(stock_data.index, stock_data['Close'], color='blue', label='Close Price')
-                ax1.set_ylabel('Price (₹)', color='blue')
-
-                ax2 = ax1.twinx()
-                ax2.bar(stock_data.index, stock_data['Volume'], color='gray', alpha=0.3)
-                ax2.set_ylabel('Volume', color='gray')
-
-                st.pyplot(fig)
-            else:
-                st.warning(f"📉 Insufficient stock data available for {stock} ({ticker})")
-        except Exception as e:
-            st.warning(f"⚠️ Failed to fetch stock data for {stock}: {e}")
+        st.pyplot(fig)
+    else:
+        st.warning("Stock data is incomplete or unavailable.")
+except Exception as e:
+    st.warning(f"⚠️ Failed to fetch stock data: {e}")

@@ -38,7 +38,7 @@ for stock in selected_stocks:
     keyword = stock_keywords[stock]
     ticker = tickers[stock]
 
-    # Fetch Google Trends data
+    # --- Google Trends Data ---
     pytrends.build_payload([keyword], timeframe='today 1-m', geo='IN')
     trend_data = pytrends.interest_over_time()
     if 'isPartial' in trend_data.columns:
@@ -51,19 +51,27 @@ for stock in selected_stocks:
         else:
             st.warning(f"No Google Trends data found for {keyword}")
 
-    # Fetch stock price data from Yahoo Finance
+    # --- Stock Data from Yahoo Finance ---
     stock_data = yf.download(ticker, period="1mo", interval="1d")
 
     with col2:
         st.subheader(f"💹 Price & Volume: {stock}")
-        if not stock_data.empty and 'Close' in stock_data.columns and 'Volume' in stock_data.columns:
-            stock_data.dropna(subset=['Close', 'Volume'], inplace=True)
+
+        # Ensure stock data exists and required columns are present
+        if (
+            not stock_data.empty and
+            all(col in stock_data.columns for col in ['Close', 'Volume'])
+        ):
+            stock_data = stock_data.dropna(subset=['Close', 'Volume'])
+
             fig, ax1 = plt.subplots()
             ax1.plot(stock_data.index, stock_data['Close'], color='blue', label='Close Price')
             ax1.set_ylabel('Price (₹)', color='blue')
+
             ax2 = ax1.twinx()
             ax2.bar(stock_data.index, stock_data['Volume'], color='gray', alpha=0.3)
             ax2.set_ylabel('Volume', color='gray')
+
             st.pyplot(fig)
         else:
-            st.warning(f"📉 No stock data available for {stock} ({ticker})")
+            st.warning(f"📉 Insufficient stock data available for {stock} ({ticker})")
